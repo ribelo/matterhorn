@@ -1,0 +1,10 @@
+;; shadow-cljs configuration
+{:deps     {:aliases [:cljs]}
+ :builds
+ {:app      {:target     :node-script
+             :main       matterhorn.core/main
+             :output-to  "build/matterhorn.js"
+             :dev        {:compiler-options {:closure-defines {re-frame.trace.trace-enabled? true
+                                                               malli.registry/type           "custom"}
+                                             :infer-extens    :auto}}
+             :devtools   {:after-load     matterhorn.core/reload!}}}}
