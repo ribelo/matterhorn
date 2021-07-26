@@ -28,7 +28,6 @@
    ;; [matterhorn.auth.fx]
    ;; [matterhorn.auth.subs]
    ;; [matterhorn.auth.events]
-   [matterhorn.provider.yf.api]
    [matterhorn.provider.yf.events :as yf.evt]
    [matterhorn.provider.yf.subs]
    [matterhorn.quant.events :as quant.evt]
@@ -80,7 +79,7 @@
          [:dispatch [::fs.evt/thaw-store :app/settings]]
          [:dispatch [::fs.evt/thaw-store :yahoo/quotes]]
          [:dispatch [::fs.evt/thaw-store :yahoo/db]]
-         ;; [:dispatch [::yf.evt/refresh-quotes]]
+         [:dispatch [::yf.evt/refresh-quotes]]
          ;;
          ;; [:dispatch [::yf.evt/fetch-selected-quotes]]
 

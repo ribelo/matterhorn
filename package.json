@@ -15,7 +15,7 @@
     "url": "https://github.com/ribelo/matterhorn.git"
   },
   "author": "",
-  "license": "unlicense",
+  "license": "Unlicense",
   "description": "",
   "dependencies": {
     "axios": "^0.21.1",
