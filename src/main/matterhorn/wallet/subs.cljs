@@ -21,8 +21,10 @@
    (dx/with-dx! [db_ :yahoo/db]
      (ra/reaction
       (m/find @db_
+        {:db/id {~ticker {:in-wallet? true :wallet-money (m/pred pos?)}}}
+        :pos
         {:db/id {~ticker {:in-wallet? true}}}
-        true
+        :net
         _ false)))))
 
 (rf/reg-sub-raw
@@ -32,6 +34,16 @@
      (ra/reaction
       (->> (m/search @db_
              {:db/id {?ticker {:wallet-percentage (m/pred pos? ?p)
-                               :wallet-money      (m/pred pos? ?m)}}}
-             [?ticker ?p ?m])
+                               :wallet-money      (m/pred pos? ?m)
+                               :wallet-cnt        (m/pred pos? ?n)}}}
+             [?ticker ?p ?n ?m])
            (sort-by second enc/rcompare))))))
+
+(rf/reg-sub-raw
+ ::wallet-value
+ (fn [_ _]
+   (dx/with-dx! [db_ :yahoo/db]
+     (ra/reaction
+      (->> (m/search @db_
+             {:db/id {?ticker {:wallet-money      (m/pred pos? ?v)}}} ?v)
+           (reduce +))))))

@@ -15,6 +15,7 @@
                                       :sha     "69e756185feb04fd4f7d6908162fcda17dd2cba8"}
          meander/epsilon             {:mvn/version "0.0.626"}
          borkdude/sci                {:mvn/version "0.2.4"}
+         lambdaisland/regal          {:mvn/version "0.0.123"}
          ribelo/firenze              {:local/root "../ribelo/firenze"}
          ribelo/doxa                 {:local/root "../ribelo/doxa"}
          ribelo/kemnath              {:local/root "../ribelo/kemnath"}

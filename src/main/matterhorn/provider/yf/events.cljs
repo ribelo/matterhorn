@@ -70,7 +70,9 @@
    {:fx [[:commit [:app/cache [[:dx/put    [:db/id :yahoo/web] :searching-failure? true]
                                [:dx/delete [:db/id :yahoo/web] :searching-ticker?]
                                [:dx/delete [:db/id :yahoo/web] :search-ticker-result]]]]
-         [:dispatch [::fetch-crumb (update m :ticker keyword)]]]}))
+         [:dispatch [::fetch-crumb (-> m
+                                       (update :ticker keyword)
+                                       (assoc :on-success [::toggle-download-ticker {:ticker (keyword ticker)}]))]]]}))
 
 ;;
 ;; * trading
@@ -262,7 +264,7 @@
 
 (rf/reg-event-fx
  ::fetch-quote-page-failure
- (fn [_ [_eid ticker]]
+ (fn [_ [_eid {:keys [ticker]}]]
    (timbre/error _eid ticker)
    (enc/do-nil (enc/have! keyword? ticker))))
 
@@ -275,7 +277,7 @@
      :let [htree (get-in cache [:db/id ticker :quote-page])]
 
      (some? htree)
-     (let [price (-> htree (.querySelector "#quote-header-info .Trsdu\\(0\\.3s\\)") .-textContent
+     (let [price (some-> htree (.querySelector "#quote-header-info .Trsdu\\(0\\.3s\\)") .-textContent
                      (str/replace "," ""))
            [_ diff-value diff-percentage]
            (->> (.querySelector htree "#quote-header-info .Trsdu\\(0\\.3s\\):nth-of-type(2)") .-textContent
@@ -342,7 +344,7 @@
    (timbre/error _eid ticker)))
 
 (defn- find-value-by-description [^js htree s]
-  (-> htree
+  (some-> htree
       (.querySelector (enc/format "td:icontains('%s') + td" s))
       .-textContent))
 

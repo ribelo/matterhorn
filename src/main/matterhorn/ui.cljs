@@ -246,6 +246,7 @@
         searching? @(rf/subscribe [::yf.sub/searching-ticker?])
         failure?   @(rf/subscribe [::yf.sub/searching-failure?])
         exists?    @(rf/subscribe [::yf.sub/ticker-exists? value])]
+    (tap> [:test (and failure? exists?)])
     [dye/vbox {:title        "search"
                :flex-shrink  0
                :border-style :round
@@ -263,7 +264,10 @@
                         :placeholder  "provide ticker"
                         :on-change    #(rf/dispatch [::yf.evt/set-input-search {:ticker %}])
                         :on-submit    (when (and failure? exists?)
-                                        #(rf/dispatch [::yf.evt/toggle-download-ticker {:ticker (keyword value)}]))}]
+                                        (fn []
+                                          (let [value @(rf/subscribe [::yf.sub/search-ticker-input])]
+                                            (tap> [:submit value])
+                                            (rf/dispatch [::yf.evt/toggle-download-ticker {:ticker (keyword value)}]))))}]
        (when searching? [dye/spinner])]]
      (when (and (seq value) (seq tickers))
        (into [dye/vlist {:id        "yaho-ticker-list"

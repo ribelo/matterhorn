@@ -69,8 +69,9 @@
      [dye/text-raw (into {:width (calc-width "ticker" total-width)
                           :align :left
                           :color (cond
-                                     (not valid-data?) :red
-                                     in-wallet?        :blue)}
+                                   (not valid-data?)   :red
+                                   (= :pos in-wallet?) :blue
+                                   (= :net in-wallet?) :yellow)}
                          props)
       (name ticker)]
      (let [v (:full-name info)]
@@ -78,8 +79,9 @@
                             :align :left
                             :padding-right 1
                             :color (cond
-                                     (not valid-data?) :red
-                                     in-wallet?        :blue)}
+                                     (not valid-data?)   :red
+                                     (= :pos in-wallet?) :blue
+                                     (= :net in-wallet?) :yellow)}
                            props)
         v])
      (let [v (:price info)]

@@ -21,7 +21,7 @@
    (fn [store]
      (timbre/debug ::freeze-store store)
      (-> (@timeout_ store) js/clearTimeout)
-     (swap! timeout_ assoc (js/setTimeout #(u/freeze-store store) 3000))
+     (swap! timeout_ assoc store (js/setTimeout #(u/freeze-store store) 3000))
      ;; (some-> on-success rf/dispatch)
      ;; (some-> on-failure rf/dispatch)
      )))
