@@ -47,7 +47,6 @@
          allocations
          (loop [i 0 wallet assets]
            (when (< i 10)
-             (tap> [:wallet i max-assets (u/add-percentage-allocations frisk risk wallet)])
              (let [wallet' (->> (u/add-percentage-allocations frisk risk wallet)
                                 (u/add-money-allocations money))]
                (if (> (count wallet') max-assets)

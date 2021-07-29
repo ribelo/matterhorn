@@ -20,10 +20,11 @@
    ["$"           8 :right]
    ["%"           8 :right]
    ["beta"        8 :right]
-   ["ma 200"     12 :right]
-   ["ma 50"      12 :right]
+   ["ma 200"      8 :right]
+   ["ma 50"       8 :right]
    ["avg dd"      8 :right]
    ["max dd"      8 :right]
+   ["3σ"          8 :right]
    ["ret"         8 :right]
    ["risk"        8 :right]
    ["calmar"      8 :right]
@@ -41,7 +42,7 @@
    headers-cell))
 
 (defn calc-width [s w]
-  (math/floor (* (/ (-width s) (-total-width)) (dec w))))
+  (math/floor (* (/ (-width s) (-total-width)) (- w 2))))
 
 (defn header-cell [{:keys [text width align] :as props}]
   [dye/text-raw (into {:bold true :width width :align align} props)
@@ -51,7 +52,7 @@
   (into
    [dye/hbox {:margin-bottom 1}]
    (map (fn [[text width align]]
-          (let [w (* (/ width (-total-width)) (dec total-width))]
+          (let [w (math/floor (* (/ width (-total-width)) (- total-width 2)))]
             [header-cell {:text text :width w :align align}])))
    headers-cell))
 
@@ -62,133 +63,147 @@
   )
 
 (defn row [{:keys [total-width] :as props} ticker]
-  (let [info @(rf/subscribe [:pull :yahoo/db [:*] [:db/id ticker]])
+  (let [info        @(rf/subscribe [:pull :yahoo/db [:*] [:db/id ticker]])
         valid-data? @(rf/subscribe [::yf.sub/valid-quotes-data? ticker])
-        in-wallet? @(rf/subscribe [::wall.sub/in-wallet? ticker])]
+        in-wallet?  @(rf/subscribe [::wall.sub/in-wallet? ticker])
+        fetched?    @(rf/subscribe [::yf.sub/fetched? ticker])
+        failure?    @(rf/subscribe [::yf.sub/failure? ticker])]
     [dye/hbox
-     [dye/text-raw (into {:width (calc-width "ticker" total-width)
-                          :align :left
-                          :color (cond
-                                   (not valid-data?)   :red
-                                   (= :pos in-wallet?) :blue
-                                   (= :net in-wallet?) :yellow)}
-                         props)
-      (name ticker)]
-     (let [v (:full-name info)]
-       [dye/text-raw (into {:width (calc-width "name" total-width)
-                            :align :left
-                            :padding-right 1
-                            :color (cond
-                                     (not valid-data?)   :red
-                                     (= :pos in-wallet?) :blue
-                                     (= :net in-wallet?) :yellow)}
-                           props)
-        v])
-     (let [v (:price info)]
-       [dye/text-raw (into {:width (calc-width "price" total-width)
-                            :align :right}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:diff-value info)]
-       [dye/text-raw (into {:width (calc-width "$" total-width)
-                            :align :right
-                            :color (if (pos? (:diff-value info)) :green :red)}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:diff-percentage info)]
-       [dye/text-raw (into {:width (calc-width "%" total-width)
-                            :align :right
-                            :color (if (pos? v) :green :red)}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:beta info)]
-       [dye/text-raw (into {:width (calc-width "beta" total-width)
-                            :align :right
-                            :color (if (> v 1.0) :blue :yellow)}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:day-ma-200 info)]
-       [dye/text-raw (into {:width (calc-width "ma 200" total-width)
-                            :align :right
-                            :color (if (> (:day-ma-50 info) (:day-ma-200 info)) :green :red)}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:day-ma-50 info)]
-       [dye/text-raw (into {:width (calc-width "ma 50" total-width)
-                            :align :right
-                            :color (if (> (:day-ma-50 info) (:day-ma-200 info)) :green :red)}
-                           props)
-        (some-> v (.toFixed 2))])
-     (let [v (:average-drawndown info)]
-       [dye/text-raw (into {:width (calc-width "avg dd" total-width)
-                            :align :right
-                            :color (cond
-                                     (<= v 0.05) :green
-                                     (<= v 0.10) :blue
-                                     (<= v 0.15) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:maximum-drawndown info)]
-       [dye/text-raw (into {:width (calc-width "max dd" total-width)
-                            :align :right
-                            :color (cond
-                                     (<= v 0.10) :green
-                                     (<= v 0.15) :blue
-                                     (<= v 0.30) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:annualized-return info)]
-       [dye/text-raw (into {:width (calc-width "ret" total-width)
-                            :align :right
-                            :color (cond
-                                     (>= v 0.30) :green
-                                     (>= v 0.15) :blue
-                                     (>= v 0.00) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:annualized-risk info)]
-       [dye/text-raw (into {:width (calc-width "risk" total-width)
-                            :align :right
-                            :color (cond
-                                     (<= v 0.15) :green
-                                     (<= v 0.30) :blue
-                                     (<= v 0.50) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:calmar-ratio info)]
-       [dye/text-raw (into {:width (calc-width "calmar" total-width)
-                            :align :right
-                            :color (cond
-                                     (>= v 5.00) :green
-                                     (>= v 2.00) :blue
-                                     (>= v 0.00) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:redp info)]
-       [dye/text-raw (into {:width (calc-width "redp" total-width)
-                            :align :right
-                            :color (cond
-                                     (=  v 0.00) :green
-                                     (<= v 0.05) :blue
-                                     (<= v 0.10) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])
-     (let [v (:allocation info)]
-       [dye/text-raw (into {:width (calc-width "salloc" total-width)
-                            :align :right
-                            :color (cond
-                                     (=  v 1.00) :green
-                                     (>= v 0.75) :blue
-                                     (>= v 0.50) :yellow
-                                     :else       :red)}
-                           props)
-        (some-> v (.toFixed 3))])]))
+     [dye/text {:wrap      :truncate
+                :dim-color (not fetched?)}
+      [dye/text-raw (into {:width (calc-width "ticker" total-width)
+                           :align :left
+                           :color (cond
+                                    (or (not valid-data?) failure?) :red
+                                    (= :pos in-wallet?)             :blue
+                                    (= :net in-wallet?)             :yellow)}
+                          props)
+       (name ticker)]
+      (let [v (:full-name info)]
+        [dye/text-raw (into {:width         (calc-width "name" total-width)
+                             :align         :left
+                             :padding-right 1
+                             :color         (cond
+                                              (or (not valid-data?) failure?) :red
+                                              (= :pos in-wallet?)             :blue
+                                              (= :net in-wallet?)             :yellow)}
+                            props)
+         v])
+      (let [v (:price info)]
+        [dye/text-raw (into {:width (calc-width "price" total-width)
+                             :align :right}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:diff-value info)]
+        [dye/text-raw (into {:width (calc-width "$" total-width)
+                             :align :right
+                             :color (if (pos? (:diff-value info)) :green :red)}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:diff-percentage info)]
+        [dye/text-raw (into {:width (calc-width "%" total-width)
+                             :align :right
+                             :color (if (pos? v) :green :red)}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:beta info)]
+        [dye/text-raw (into {:width (calc-width "beta" total-width)
+                             :align :right
+                             :color (if (> v 1.0) :blue :yellow)}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:day-ma-200 info)]
+        [dye/text-raw (into {:width (calc-width "ma 200" total-width)
+                             :align :right
+                             :color (if (> (:day-ma-50 info) (:day-ma-200 info)) :green :red)}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:day-ma-50 info)]
+        [dye/text-raw (into {:width (calc-width "ma 50" total-width)
+                             :align :right
+                             :color (if (> (:day-ma-50 info) (:day-ma-200 info)) :green :red)}
+                            props)
+         (some-> v (.toFixed 2))])
+      (let [v (:average-drawndown info)]
+        [dye/text-raw (into {:width (calc-width "avg dd" total-width)
+                             :align :right
+                             :color (cond
+                                      (<= v 0.05) :green
+                                      (<= v 0.10) :blue
+                                      (<= v 0.15) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:maximum-drawndown info)]
+        [dye/text-raw (into {:width (calc-width "max dd" total-width)
+                             :align :right
+                             :color (cond
+                                      (<= v 0.10) :green
+                                      (<= v 0.15) :blue
+                                      (<= v 0.30) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:std3 info)]
+        [dye/text-raw (into {:width (calc-width "3σ" total-width)
+                             :align :right
+                             :color (cond
+                                      (<= v 0.15) :green
+                                      (<= v 0.30) :blue
+                                      (<= v 0.45) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:annualized-return info)]
+        [dye/text-raw (into {:width (calc-width "ret" total-width)
+                             :align :right
+                             :color (cond
+                                      (>= v 0.30) :green
+                                      (>= v 0.15) :blue
+                                      (>= v 0.00) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:annualized-risk info)]
+        [dye/text-raw (into {:width (calc-width "risk" total-width)
+                             :align :right
+                             :color (cond
+                                      (<= v 0.15) :green
+                                      (<= v 0.30) :blue
+                                      (<= v 0.50) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:calmar-ratio info)]
+        [dye/text-raw (into {:width (calc-width "calmar" total-width)
+                             :align :right
+                             :color (cond
+                                      (>= v 5.00) :green
+                                      (>= v 2.00) :blue
+                                      (>= v 0.00) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:redp info)]
+        [dye/text-raw (into {:width (calc-width "redp" total-width)
+                             :align :right
+                             :color (cond
+                                      (=  v 0.00) :green
+                                      (<= v 0.05) :blue
+                                      (<= v 0.10) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
+      (let [v (:allocation info)]
+        [dye/text-raw (into {:width (calc-width "salloc" total-width)
+                             :align :right
+                             :color (cond
+                                      (=  v 1.00) :green
+                                      (>= v 0.75) :blue
+                                      (>= v 0.50) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])]]))
 
 (defn tickers-table []
   (let [view_    (rf/subscribe [::ui.sub/view])
@@ -205,12 +220,11 @@
        [dye/box {:padding-left 1} [header @width_]]
        (into
         [dye/vlist {:active?   @active?_
-                    :height    (- @height_ 2)
+                    :height    @height_
                     :flex-grow 1
                     :idx_      idx_
                     :on-submit #(rf/dispatch [::wall.evt/toggle-ticker {:ticker (nth @tickers_ @idx_)}])
                     :ref       (fn [el]
-                                 (tap> [:ref!])
                                  (enc/when-let [{:keys [width height]} (some-> el dye/measure-element)]
                                    (when (and (some? height) (not= height @height_))
                                      (reset! height_ height))

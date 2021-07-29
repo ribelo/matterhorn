@@ -110,7 +110,6 @@
 (comment
   (rf/clear-subscription-cache!)
 
-  (rf/subscribe [::ticker-full-name :msft])
   (rf/subscribe [:pull-one :yahoo/db [:full-name] [:db/id :msft]])
   (dx/with-dx! [app_ :yahoo/db]
     @app_))
@@ -123,10 +122,15 @@
   )
 
 (rf/reg-sub-raw
- ::fetching?
- (fn [_ _]
+ ::fetched?
+ (fn [_ [_ ticker]]
    (dx/with-dx [cache_ :app/cache]
      (ra/reaction
-      (m/find (get-in @cache_ [:db/id])
-        (m/$ {:fetching? true}) true
-        _ false)))))
+      (get-in @cache_ [:db/id ticker :fetched?])))))
+
+(rf/reg-sub-raw
+ ::failure?
+ (fn [_ [_ ticker]]
+   (dx/with-dx [cache_ :app/cache]
+     (ra/reaction
+      (get-in @cache_ [:db/id ticker :failure?])))))

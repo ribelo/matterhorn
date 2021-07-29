@@ -79,9 +79,7 @@
          [:dispatch [::fs.evt/thaw-store :app/settings]]
          [:dispatch [::fs.evt/thaw-store :yahoo/quotes]]
          [:dispatch [::fs.evt/thaw-store :yahoo/db]]
-         ;; [:dispatch [::yf.evt/refresh-quotes]]
-         ;;
-         ;; [:dispatch [::yf.evt/fetch-selected-quotes]]
+         [:dispatch [::yf.evt/refresh-quotes]]
 
          [:dispatch [::set-boot-successful]]
          ]}))

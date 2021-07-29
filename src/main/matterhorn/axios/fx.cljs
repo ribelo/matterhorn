@@ -5,15 +5,16 @@
    [taoensso.encore :as enc]
    [taoensso.timbre :as timbre]
    [meander.epsilon :as m]
-   [re-frame.core :as rf]))
+   [cljs-bean.core :refer [->js]]
+   [re-frame.core :as rf]
+   ["date-fns" :as dtf]))
 
 (def axios (js/require "axios"))
 
 (defn <http
-  [{:keys [method url]}]
+  [{:keys [method url opts] :or {opts {}}}]
   (go (case method
-        :get  (<p! (-> (.get axios url) (.catch (fn [_err])))))))
-
+        :get  (<p! (-> (.get axios url (->js opts)) (.catch (fn [_err])))))))
 
 (defn flatten-dispatch [x]
   (m/rewrite x
@@ -27,7 +28,7 @@
 (rf/reg-fx
  :axios
  (let [limiter (enc/limiter {:3s [5 5000]})]
-   (fn [{:keys [method url on-success on-failure] :as m}]
+   (fn [{:keys [method url on-success on-failure opts] :as m}]
      (go-loop []
        (enc/cond
          (limiter)

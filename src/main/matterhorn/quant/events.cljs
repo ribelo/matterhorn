@@ -4,14 +4,16 @@
    [taoensso.timbre :as timbre]
    [re-frame.core :as rf]
    [ribelo.doxa :as dx]
-   [ribelo.qualsdorf :as quant]
    [ribelo.kemnath :as math]
+   [ribelo.stade :as stats]
+   [ribelo.qualsdorf :as quant]
    [matterhorn.quotes.api :as q]))
 
 (rf/reg-event-fx
  ::refresh-quant
  [(rf/inject-cofx ::dx/with-dx! [:quotes :yahoo/quotes :settings :app/settings])]
- (fn [{:keys [settings quotes]} [_ {:keys [ticker] :as m}]]
+ (fn [{:keys [settings quotes]} [_eid {:keys [ticker] :as m}]]
+   (timbre/debug _eid ticker)
    (enc/when-let [{:keys [money risk frisk tf freq max-assets]}
                   (get-in settings [:db/id :settings])
                   data  (q/quotes quotes ticker (or tf :mn))
@@ -29,7 +31,8 @@
                          :ror                     (quant/rate-of-return ret)
                          :cagr                    (quant/cagr ret)
                          :redp                    (quant/rolling-economic-drawndown close)
-                         :allocation              (quant/redp-single-allocation frisk frisk close)}]
+                         :std3                    (* 3 (stats/std ret))
+                         :allocation              (quant/redp-single-allocation frisk risk close)}]
      {:fx [[:commit [:yahoo/db [:dx/put [:db/id ticker] stat]]]
            [:freeze-store :yahoo/db]]})))
 
@@ -39,11 +42,12 @@
  (fn [{:keys [quotes]} [_eid]]
    (timbre/debug _eid)
    (let [tickers (keys (quotes :db/id))]
-     {:fx (mapv (fn [ticker] [:dispatch [::refresh-quant ticker]]) tickers)})))
+     {:fx (mapv (fn [ticker] [:dispatch [::refresh-quant {:ticker ticker}]]) tickers)})))
 
 
 (comment
   (dx/with-dx! [quotes_ :yahoo/quotes]
-    (tap> @quotes_))
-  (rf/dispatch [::refresh-quant :msft])
+    (let [data (-> (q/quotes @quotes_ :msft :mn)
+                   (q/close -12 -1))]
+      (quant/redp-single-allocation 0.0 0.3 data)))
   )

@@ -121,7 +121,6 @@
   (type (assoc (.-EMPTY cljs.core/PersistentHashMap) :a 1))
   (type (assoc (hash-map) :a 1))
 
-  (rf/dispatch [::fetch-options :msft])
   (dx/with-dx [options :cboe/options]
     (opt.api/nope @options :msft))
   (dx/with-dx [cache :cboe/cache]

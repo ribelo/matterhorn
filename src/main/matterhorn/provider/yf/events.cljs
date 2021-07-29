@@ -142,11 +142,9 @@
    {:fx [[:commit [:app/cache [:dx/delete [:db/id ticker] :featching?]]]]}))
 
 (comment
-  (rf/dispatch [::fetch-crumb {:ticker :msft}])
   (dx/with-dx! [cache_ :app/cache]
     @cache_)
 
-  (rf/dispatch [::fetch-quotes {:ticker :msft}])
   (dx/with-dx! [quotes_ :yahoo/quotes]
     (q/quotes @quotes_ :msft :mn))
   )
@@ -156,23 +154,21 @@
  [(rf/inject-cofx ::dx/with-dx! [:quotes :yahoo/quotes :cache :app/cache])]
  (fn [{:keys [quotes cache]} [_eid {:keys [ticker start-time end-time on-success on-failure] :as m}]]
    (timbre/debug _eid ticker :start-time start-time :end-time end-time)
-   (enc/cond!
-     :let [last-time   (some-> (q/quotes quotes ticker :d1) (q/time -1))
-           start-time  (or start-time last-time (-> (js/Date.) (dtf/startOfYear) (dtf/subYears 5) (dtf/format "yyyy-MM-dd")))
-           end-time    (or end-time (dtf/format (js/Date.) "yyyy-MM-dd"))
-           crumb       (get-in cache [:db/id ticker :crumb])
-           url         "https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%s&period2=%s&interval=%s&events=%s&crumb=%s"
-           start-time' (str-time->epoch start-time)
-           end-time'   (str-time->epoch end-time)
-           url         (enc/format url (str/upper (name ticker)) start-time' end-time' "1d" "history" crumb)]
-     (some? crumb)
-     {:fx [[:commit [:app/cache [:dx/put [:db/id ticker] :fetching? true]]]
-           [:axios  {:method     :get
+   (let [start-time  (or
+                      (some-> start-time (js/Date.) .getTime (/ 1000))
+                      (some-> (q/quotes quotes ticker :d1) (q/time -1) (js/Date.) .getTime (/ 1000))
+                      (-> (js/Date.) dtf/startOfYear (dtf/subYears 5) .getTime (/ 1000) long))
+         end-time    (-> (or end-time (js/Date.)) (js/Date.) .getTime (/ 1000) long)
+         url         "https://query2.finance.yahoo.com/v8/finance/chart/%s"
+         url         (enc/format url (str/upper (name ticker)))]
+     {:fx [[:axios  {:method     :get
                      :url        url
+                     :opts       {:params {:period1  start-time
+                                           :period2  end-time
+                                           :interval "1d"}}
                      :on-success [[::fetch-quotes-success m] on-success]
-                     :on-failure [[::fetch-quotes-failure m] on-failure]}]]}
-     (nil? crumb)
-     {:fx [[:dispatch [::fetch-crumb (assoc m :on-success [::fetch-quotes m])]]]})))
+                     :on-failure [[::fetch-quotes-failure m] on-failure]}]]})))
+
 
 (rf/reg-event-fx
  ::fetch-quotes-success
@@ -180,37 +176,50 @@
    (timbre/debug _eid ticker)
    (enc/have! keyword? ticker)
    (enc/have! resp)
-   (enc/when-let [data (not-empty
-                        (=>> (str/lines (.-data resp))
-                             (map (fn [line] (str/split line ",")))
-                             (drop 1)
-                             (keep (fn [[t o h l c _ v]]
-                                     (let [dt (dtf/formatISO (dtf-tz/zonedTimeToUtc t))]
-                                       {:time   dt
-                                        :open   (enc/as-?float o)
-                                        :high   (enc/as-?float h)
-                                        :low    (enc/as-?float l)
-                                        :close  (enc/as-?float c)
-                                        :volume (enc/as-?int v)})))
-                             (filter schema/candle-bar?)))]
-     {:fx [[:commit [:app/cache [:dx/delete [:db/id ticker] :fetching?]]]
+   (enc/do-nil (tap> [ticker resp]))
+   (let [result (->clj (some-> resp .-data .-chart .-result))
+         timezone (m/rewrite result [{:meta {:timezone ?tz}}] ?tz)
+         data (m/rewrite result
+                [{:timestamp [(m/app (fn [t] (-> (* t 1000)
+                                                (dtf-tz/zonedTimeToUtc timezone))) !ts) ...]
+                  :indicators {:quote [{:open   [!os ...]
+                                        :high   [!hs ...]
+                                        :low    [!ls ...]
+                                        :close  [!cs ...]
+                                        :volume [!vs ...]}]}}]
+                [{:time   !ts
+                  :open   !os
+                  :high   !hs
+                  :low    !ls
+                  :close  !cs
+                  :volume !vs} ...])]
+     (tap> [:data ticker data])
+     {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :fetched? true]
+                                 [:dx/delete [:db/id ticker] :failure?]]]]
            [:commit [:yahoo/quotes [[:dx/update [:db/id ticker] :data
                                      (fn [v]
                                        (into (or v []) (enc/xdistinct :time) data))]]]]
            [:dispatch [::quant.evt/refresh-quant m]]
-           [:freeze-store :yahoo/quotes]]})))
-
-(comment
-  (rf/dispatch [::fetch-quotes {:ticker :amzn}])
-  )
+           [:freeze-store :yahoo/quotes]]})
+   ))
 
 (rf/reg-event-fx
  ::fetch-quotes-failure
- (fn [_ [_eid {:keys [ticker]}]]
+ (fn [_ [_eid {:keys [ticker] :as m}]]
    (timbre/error _eid ticker)
    (enc/have! keyword? ticker)
-   {:fx [[:commit [:app/cache [[:dx/delete [:db/id ticker] :fetching?]
-                               [:dx/put [:db/id ticker] :error? true]]]]]}))
+   {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :failure? true]]]]
+         [:dispatch-later [(enc/ms :secs 10) [_eid ticker]
+                           [::fetch-quotes m]]]]}))
+
+(defn join-events [events]
+  [:dispatch
+   (m/rewrite events
+     (m/or [[?eid ?m] . !xs ...]
+           (m/and [[?eid] . !xs ...]
+                  (m/let [?m {}])))
+     [?eid {& [?m {:on-success (m/cata [!xs ...])}]}]
+     [] nil)])
 
 (rf/reg-event-fx
  ::refresh-quotes
@@ -220,18 +229,25 @@
    (if (not ticker)
      ;; all
      (let [tickers (keys (quotes :db/id))]
+       (tap> [:joined (into []
+                            (map (fn [ticker]
+                                   (join-events [[::fetch-quotes {:ticker ticker}]
+                                                 [::fetch-header-info {:ticker ticker}]
+                                                 [::fetch-stats {:ticker ticker}]
+                                                 [::fetch-company-info {:ticker ticker}]])))
+                            tickers)])
        {:fx (into []
-                  (mapcat (fn [ticker]
-                            [[:dispatch [::fetch-header-info  {:ticker ticker}]]
-                             [:dispatch [::fetch-stats        {:ticker ticker}]]
-                             [:dispatch [::fetch-company-info {:ticker ticker}]]
-                             [:dispatch [::fetch-quotes       {:ticker ticker}]]]))
-                  tickers)})
-     {:fx [[:dispatch [::quant.evt/refresh-quants m]]
-           [:dispatch [::fetch-header-info        m]]
-           [:dispatch [::fetch-stats              m]]
-           [:dispatch [::fetch-company-info       m]]
-           [:dispatch [::fetch-quotes             m]]]})))
+                   (map (fn [ticker]
+                          (join-events [[::fetch-quotes {:ticker ticker}]
+                                        [::fetch-header-info {:ticker ticker}]
+                                        [::fetch-stats {:ticker ticker}]
+                                        [::fetch-company-info {:ticker ticker}]])))
+                   tickers)})
+     {:fx [[:dispatch [::fetch-crumb        m]]
+           [:dispatch [::fetch-quotes       m]]
+           [:dispatch [::fetch-header-info  m]]
+           [:dispatch [::fetch-stats        m]]
+           [:dispatch [::fetch-company-info m]]]})))
 
 (comment
   (rf/dispatch [::fetch-quotes {:ticker :aapl}])
