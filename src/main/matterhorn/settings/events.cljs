@@ -5,6 +5,7 @@
    [re-frame.core :as rf]
    [ribelo.kemnath :as math]
    [ribelo.doxa :as dx]
+   [matterhorn.quant.events :as q.evt]
    [matterhorn.wallet.events :as wall.evt]))
 
 (rf/reg-event-fx
@@ -26,7 +27,8 @@
    (let [risk (get-in settings [:db/id :settings :risk])]
      (when (>= (+ risk x) 0)
        {:fx [[:commit [:app/settings [:dx/update [:db/id :settings] :risk (comp math/round2 +) x]]]
-             [:dispatch-later [(enc/ms :ms 500) [_eid :dispatch] [::wall.evt/calc-allocations]]]
+             [:dispatch-later [(enc/ms :ms 500) [_eid :quats] [::q.evt/refresh-quants]]]
+             [:dispatch-later [(enc/ms :ms 500) [_eid :wallet] [::wall.evt/calc-allocations]]]
              [:freeze-store :app/settings]]}))))
 
 (rf/reg-event-fx
@@ -37,7 +39,8 @@
    (let [frisk (get-in settings [:db/id :settings :frisk])]
      (when (>= (+ frisk x) -0.05)
        {:fx [[:commit [:app/settings [:dx/update [:db/id :settings] :frisk (comp math/round2 +) x]]]
-             [:dispatch-later [(enc/ms :ms 500) [_eid :dispatch] [::wall.evt/calc-allocations]]]
+             [:dispatch-later [(enc/ms :ms 500) [_eid :quants] [::q.evt/refresh-quants]]]
+             [:dispatch-later [(enc/ms :ms 500) [_eid :wallet] [::wall.evt/calc-allocations]]]
              [:freeze-store :app/settings]]}))))
 
 (rf/reg-event-fx

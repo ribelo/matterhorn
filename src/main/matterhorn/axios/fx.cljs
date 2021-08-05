@@ -1,20 +1,21 @@
 (ns matterhorn.axios.fx
   (:require
-   [cljs.core.async :as a :refer [<! go go-loop]]
-   [cljs.core.async.interop :refer-macros [<p!]]
    [taoensso.encore :as enc]
    [taoensso.timbre :as timbre]
    [meander.epsilon :as m]
+   [missionary.core :as mi]
    [cljs-bean.core :refer [->js]]
-   [re-frame.core :as rf]
-   ["date-fns" :as dtf]))
+   [re-frame.core :as rf]))
 
 (def axios (js/require "axios"))
 
 (defn <http
   [{:keys [method url opts] :or {opts {}}}]
-  (go (case method
-        :get  (<p! (-> (.get axios url (->js opts)) (.catch (fn [_err])))))))
+  (fn [s f]
+    (case method
+      :get (-> (.get axios url (->js opts))
+               (.then s f)))
+    (fn [])))
 
 (defn flatten-dispatch [x]
   (m/rewrite x
@@ -27,31 +28,32 @@
 
 (rf/reg-fx
  :axios
- (let [limiter (enc/limiter {:3s [5 5000]})]
-   (fn [{:keys [method url on-success on-failure opts] :as m}]
-     (go-loop []
-       (enc/cond
-         (limiter)
-         (do (<! (a/timeout 1000)) (recur))
+ (let [limiter (enc/limiter {:5s [5 5000]})]
+   (fn [{:keys [url on-success on-failure] :as m}]
+     (let [t (mi/sp
+              (loop []
+                (if-not (limiter)
+                  (let [resp (mi/? (<http m))
+                        code (some-> resp .-status)]
+                    (if (== 200 code)
+                      resp
+                      (throw (ex-info "request failed" {:code code :url url :resp resp}))))
+                  (do (mi/? (mi/sleep 1000)) (recur)))))]
+       (t
+        (fn [resp]
+          (enc/cond!
+            (fn? on-success)
+            (on-success resp)
 
-         :let [resp    (<! (<http m))
-               code (some-> resp .-status)]
+            (vector? on-success)
+            (doseq [[k m] (flatten-dispatch on-success)]
+              (rf/dispatch [k (assoc m :resp resp)]))))
+        (fn [{:keys [code url resp] :as _err}]
+          (do (timbre/warnf "request: %s code: %s" url code)
+              (enc/cond!
+                (fn? on-failure)
+                (on-failure resp)
 
-         (== 200 code)
-         (enc/cond!
-           (fn? on-success)
-           (on-success resp)
-
-           (vector? on-success)
-           (doseq [[k m] (flatten-dispatch on-success)]
-             (rf/dispatch [k (assoc m :resp resp)])))
-
-         :else
-         (do (timbre/warnf "request: %s code: %s" url code)
-             (enc/cond!
-               (fn? on-failure)
-               (on-failure resp)
-
-               (vector? on-failure)
-               (doseq [[k m] (flatten-dispatch on-failure)]
-                 (rf/dispatch [k (assoc m :resp resp)])))))))))
+                (vector? on-failure)
+                (doseq [[k m] (flatten-dispatch on-failure)]
+                  (rf/dispatch [k (assoc m :resp resp)]))))))))))

@@ -2,10 +2,8 @@
   (:require
    [reagent.ratom :as ra :refer [reaction]]
    [re-frame.core :as rf]
-   [day8.re-frame.async-flow-fx]
    [cljs-bean.core :as bean :refer [->js ->clj]]
    [shadow.resource :as rc]
-   [applied-science.js-interop :as j]
    [taoensso.timbre :as timbre]
    [ribelo.doxa :as dx]
    [matterhorn.subs]
@@ -79,7 +77,7 @@
          [:dispatch [::fs.evt/thaw-store :app/settings]]
          [:dispatch [::fs.evt/thaw-store :yahoo/quotes]]
          [:dispatch [::fs.evt/thaw-store :yahoo/db]]
-         [:dispatch [::yf.evt/refresh-quotes]]
+         [:dispatch [::yf.evt/refresh-matterhorn]]
 
          [:dispatch [::set-boot-successful]]
          ]}))

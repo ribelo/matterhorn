@@ -87,14 +87,12 @@
      {:fx [[:commit [:cboe/ticker [:dx/put [:db/id ticker] (parse-ticker-data htree)]]]]}
 
      (nil? htree)
-     (do
-       (tap> [:test _eid ticker :nill-htree])
-       {:fx [[:async-flow
-              {:id             (enc/merge-keywords [_eid :async-flow ticker])
-               :first-dispatch [::fetch-options-data ticker]
-               :rules          [{:when     :seen? :events ::fetch-options-data-success
-                                 :dispatch [::fetch-ticker ticker]
-                                 :halt?    true}]}]]}))))
+     {:fx [[:async-flow
+            {:id             (enc/merge-keywords [_eid :async-flow ticker])
+             :first-dispatch [::fetch-options-data ticker]
+             :rules          [{:when     :seen? :events ::fetch-options-data-success
+                               :dispatch [::fetch-ticker ticker]
+                               :halt?    true}]}]]})))
 
 (rf/reg-event-fx
  ::fetch-options
@@ -107,14 +105,12 @@
      {:fx [[:commit [:cboe/options [:dx/put (parse-options-data htree)]]]]}
 
      (nil? htree)
-     (do
-       (tap> [:test _eid ticker :nill-htree])
-       {:fx [[:async-flow
-              {:id             (enc/merge-keywords [_eid :async-flow ticker])
-               :first-dispatch [::fetch-options-data ticker]
-               :rules          [{:when     :seen? :events ::fetch-options-data-success
-                                 :dispatch [::fetch-options ticker]
-                                 :halt?    true}]}]]}))))
+     {:fx [[:async-flow
+            {:id             (enc/merge-keywords [_eid :async-flow ticker])
+             :first-dispatch [::fetch-options-data ticker]
+             :rules          [{:when     :seen? :events ::fetch-options-data-success
+                               :dispatch [::fetch-options ticker]
+                               :halt?    true}]}]]})))
 
 (comment
 

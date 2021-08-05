@@ -13,13 +13,13 @@
    [matterhorn.wallet.events :as wall.evt]
    [matterhorn.wallet.subs :as wall.sub]))
 
-(def headers-cell
+(def header-cells
   [["ticker"      8 :left]
    ["name"       24 :left]
    ["price"       8 :right]
    ["$"           8 :right]
    ["%"           8 :right]
-   ["beta"        8 :right]
+   ["β"           8 :right]
    ["ma 200"      8 :right]
    ["ma 50"       8 :right]
    ["avg dd"      8 :right]
@@ -27,19 +27,18 @@
    ["3σ"          8 :right]
    ["ret"         8 :right]
    ["risk"        8 :right]
+   ["sr"          8 :right]
    ["calmar"      8 :right]
    ["redp"        8 :right]
    ["salloc"      8 :right]])
 
 (defn -width [s]
-  (m/find headers-cell
+  (m/find header-cells
     (m/scan [~s ?x & _]) ?x))
 
 (defn -total-width []
-  (reduce
-   (fn [acc [_ v _]] (+ acc v))
-   0
-   headers-cell))
+  (m/rewrite header-cells
+    [[_ !vs _] ...] ~(reduce + !vs)))
 
 (defn calc-width [s w]
   (math/floor (* (/ (-width s) (-total-width)) (- w 2))))
@@ -54,7 +53,7 @@
    (map (fn [[text width align]]
           (let [w (math/floor (* (/ width (-total-width)) (- total-width 2)))]
             [header-cell {:text text :width w :align align}])))
-   headers-cell))
+   header-cells))
 
 (comment
   (tap> [@(rf/subscribe [:pull :yahoo/db
@@ -105,13 +104,13 @@
                              :align :right
                              :color (if (pos? v) :green :red)}
                             props)
-         (some-> v (.toFixed 2))])
+         (some-> v (.toFixed 3))])
       (let [v (:beta info)]
-        [dye/text-raw (into {:width (calc-width "beta" total-width)
+        [dye/text-raw (into {:width (calc-width "β" total-width)
                              :align :right
                              :color (if (> v 1.0) :blue :yellow)}
                             props)
-         (some-> v (.toFixed 2))])
+         (or (some-> v (.toFixed 2)) "----")])
       (let [v (:day-ma-200 info)]
         [dye/text-raw (into {:width (calc-width "ma 200" total-width)
                              :align :right
@@ -174,6 +173,16 @@
                                       :else       :red)}
                             props)
          (some-> v (.toFixed 3))])
+      (let [v (:annualized-sharpe-ratio info)]
+        [dye/text-raw (into {:width (calc-width "sr" total-width)
+                             :align :right
+                             :color (cond
+                                      (>= v 3.00) :green
+                                      (>= v 2.00) :blue
+                                      (>= v 1.00) :yellow
+                                      :else       :red)}
+                            props)
+         (some-> v (.toFixed 3))])
       (let [v (:calmar-ratio info)]
         [dye/text-raw (into {:width (calc-width "calmar" total-width)
                              :align :right
@@ -230,7 +239,8 @@
                                      (reset! height_ height))
                                    (when (and (some? width) (not= width @width_))
                                      (reset! width_ width))))
-                    :keymap    [["delete" #(rf/dispatch [::yf.evt/toggle-download-ticker {:ticker (nth @tickers_ @idx_)}])]]}]
+                    :keymap    [["delete" #(rf/dispatch [::yf.evt/toggle-download-ticker {:ticker (nth @tickers_ @idx_)}])]
+                                ["C-r"    #(rf/dispatch [::yf.evt/refresh-matterhorn])]]}]
         (map-indexed
          (fn [i ticker]
            [row {:total-width @width_

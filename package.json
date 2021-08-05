@@ -1,6 +1,6 @@
 {
   "name": "matterhorn",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "main": "resources/electron.js",
   "build": {
     "files": [

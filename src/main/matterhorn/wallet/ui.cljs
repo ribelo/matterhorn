@@ -24,7 +24,7 @@
              [dye/text " "]
              [dye/text (enc/format "%6s" "n")]
              [dye/text " "]
-             [dye/text (enc/format "%8s" "v")]]]
+             [dye/text (enc/format "%8s" "$")]]]
            (map (fn [[ticker p n v]]
                   [dye/hbox {:flex-grow 1}
                    [dye/box {:flex-grow 1}

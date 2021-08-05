@@ -34,7 +34,7 @@
    (timbre/debug _eid)
    (let [{:keys [risk frisk freq tf money max-assets]}
          (get-in settings [:db/id :settings])
-         all-tickers     (vec (m/search yahoo
+         all-tickers (vec (m/search yahoo
                             {:db/id {?ticker {:in-wallet? true}}}
                             ?ticker))
          pricef      (fn [ticker] (get-in yahoo [:db/id ticker :price]))
@@ -46,12 +46,11 @@
                                      :price  (pricef ticker)}))))
          allocations
          (loop [i 0 wallet assets]
-           (when (< i 10)
-             (let [wallet' (->> (u/add-percentage-allocations frisk risk wallet)
-                                (u/add-money-allocations money))]
-               (if (> (count wallet') max-assets)
-                 (recur (inc i) (u/drop-worse-allocation wallet'))
-                 wallet'))))]
+           (let [wallet' (->> (u/add-percentage-allocations frisk risk wallet)
+                              (u/add-money-allocations money))]
+             (if (or (> (count wallet') max-assets) (enc/rsome zero? (mapv :n wallet')))
+               (recur (inc i) (u/drop-worse-allocation wallet'))
+               wallet')))]
 
      (when (seq allocations)
        {:fx [[:commit [:yahoo/db

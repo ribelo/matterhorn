@@ -32,6 +32,7 @@
                          :cagr                    (quant/cagr ret)
                          :redp                    (quant/rolling-economic-drawndown close)
                          :std3                    (* 3 (stats/std ret))
+                         :ulcer-index             (quant/ulcer-index ret)
                          :allocation              (quant/redp-single-allocation frisk risk close)}]
      {:fx [[:commit [:yahoo/db [:dx/put [:db/id ticker] stat]]]
            [:freeze-store :yahoo/db]]})))
@@ -46,6 +47,7 @@
 
 
 (comment
+  (rf/dispatch [::refresh-quants])
   (dx/with-dx! [quotes_ :yahoo/quotes]
     (let [data (-> (q/quotes @quotes_ :msft :mn)
                    (q/close -12 -1))]

@@ -12,7 +12,8 @@
    [cljs-bean.core :refer [->clj]]
    [matterhorn.schema :as schema]
    [matterhorn.quotes.api :as q]
-   [matterhorn.quant.events :as quant.evt]))
+   [matterhorn.quant.events :as quant.evt]
+   [matterhorn.wallet.events :as wall.evt]))
 
 ;;
 ;; * ui
@@ -176,7 +177,6 @@
    (timbre/debug _eid ticker)
    (enc/have! keyword? ticker)
    (enc/have! resp)
-   (enc/do-nil (tap> [ticker resp]))
    (let [result (->clj (some-> resp .-data .-chart .-result))
          timezone (m/rewrite result [{:meta {:timezone ?tz}}] ?tz)
          data (m/rewrite result
@@ -193,7 +193,6 @@
                   :low    !ls
                   :close  !cs
                   :volume !vs} ...])]
-     (tap> [:data ticker data])
      {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :fetched? true]
                                  [:dx/delete [:db/id ticker] :failure?]]]]
            [:commit [:yahoo/quotes [[:dx/update [:db/id ticker] :data
@@ -222,32 +221,19 @@
      [] nil)])
 
 (rf/reg-event-fx
- ::refresh-quotes
+ ::refresh-matterhorn
  [(rf/inject-cofx ::dx/with-dx! [:quotes :yahoo/quotes])]
- (fn [{:keys [quotes]} [_eid {:keys [ticker] :as m}]]
-   (timbre/debug _eid ticker)
-   (if (not ticker)
-     ;; all
-     (let [tickers (keys (quotes :db/id))]
-       (tap> [:joined (into []
-                            (map (fn [ticker]
-                                   (join-events [[::fetch-quotes {:ticker ticker}]
-                                                 [::fetch-header-info {:ticker ticker}]
-                                                 [::fetch-stats {:ticker ticker}]
-                                                 [::fetch-company-info {:ticker ticker}]])))
-                            tickers)])
-       {:fx (into []
-                   (map (fn [ticker]
-                          (join-events [[::fetch-quotes {:ticker ticker}]
-                                        [::fetch-header-info {:ticker ticker}]
-                                        [::fetch-stats {:ticker ticker}]
-                                        [::fetch-company-info {:ticker ticker}]])))
-                   tickers)})
-     {:fx [[:dispatch [::fetch-crumb        m]]
-           [:dispatch [::fetch-quotes       m]]
-           [:dispatch [::fetch-header-info  m]]
-           [:dispatch [::fetch-stats        m]]
-           [:dispatch [::fetch-company-info m]]]})))
+ (fn [{:keys [quotes]} [_eid]]
+   (timbre/debug _eid)
+   (let [tickers (keys (quotes :db/id))]
+     {:fx (into []
+                (map (fn [ticker]
+                       (join-events [[::fetch-quotes {:ticker ticker}]
+                                     [::fetch-header-info {:ticker ticker}]
+                                     [::fetch-stats {:ticker ticker}]
+                                     [::fetch-company-info {:ticker ticker}]
+                                     [::quant.evt/refresh-quant {:ticker ticker}]])))
+                tickers)})))
 
 (comment
   (rf/dispatch [::fetch-quotes {:ticker :aapl}])
@@ -300,7 +286,7 @@
                 (re-find #"([+-]?\d+[,\d+]*.\d+) \(([+-]?\d+[,\d+]*.\d+)%\)"))
            m     {:price           (enc/as-?float price)
                   :diff-value      (enc/as-?float diff-value)
-                  :diff-percentage (enc/as-?float diff-percentage)}]
+                  :diff-percentage (/ (enc/as-?float diff-percentage) 100)}]
        {:fx [[:commit [:yahoo/db [:dx/put [:db/id ticker] m]]]
              [:freeze-store :yahoo/db]]})
 
