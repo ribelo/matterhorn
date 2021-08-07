@@ -3,25 +3,28 @@
    [re-frame.core :as rf]
    [taoensso.encore :as enc]
    [taoensso.timbre :as timbre]
+   [missionary.core :as mi]
    [ribelo.doxa :as dx]
    [matterhorn.file-storage.util :as u]))
 
-(let [timeout_ (atom {})]
+(let [tasks_ (atom {})]
   (rf/reg-fx
    :freeze-dx
    (fn [store db]
      (timbre/debug ::freeze-dx store)
-     (-> (@timeout_ store) js/clearTimeout)
-     (swap! timeout_ assoc store (js/setTimeout #(u/freeze-dx store db) 3000)))))
+     (when-let [cancel (@tasks_ store)] (cancel))
+     (let [task (mi/sp (mi/? (mi/sleep 3000)) (u/freeze-dx store db))]
+       (swap! tasks_ assoc store (task #() #()))))))
 
 ;; TODO on-success/failure
-(let [timeout_ (atom {})]
+(let [tasks_ (atom {})]
   (rf/reg-fx
    :freeze-store
    (fn [store]
      (timbre/debug ::freeze-store store)
-     (-> (@timeout_ store) js/clearTimeout)
-     (swap! timeout_ assoc store (js/setTimeout #(u/freeze-store store) 3000))
+     (when-let [cancel (@tasks_ store)] (cancel))
+     (let [task (mi/sp (mi/? (mi/sleep 3000)) (u/freeze-store store))]
+       (swap! tasks_ assoc store (task #() #())))
      ;; (some-> on-success rf/dispatch)
      ;; (some-> on-failure rf/dispatch)
      )))

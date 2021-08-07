@@ -50,8 +50,12 @@
    (timbre/debug _eid)
    (let [tf (get-in settings [:db/id :settings :tf])]
      {:fx [(case tf
-             (nil :mn) [:commit [:app/settings [:dx/put [:db/id :settings] :tf :d1]]]
-             :d1       [:commit [:app/settings [:dx/put [:db/id :settings] :tf :mn]]])
+             (nil :mn) [:commit [:app/settings [[:dx/put    [:db/id :settings] :tf :d1]
+                                                [:dx/update [:db/id :settings] :freq
+                                                 (fn [freq] (* freq 21))]]]]
+             :d1       [:commit [:app/settings [[:dx/put    [:db/id :settings] :tf :mn]
+                                                [:dx/update [:db/id :settings] :freq
+                                                 (fn [freq] (math/max 1 (math/floor (/ freq 21))))]]]])
            [:dispatch-later [(enc/ms :ms 500) [_eid :dispatch] [::wall.evt/calc-allocations]]]
            [:freeze-store :app/settings]]})))
 

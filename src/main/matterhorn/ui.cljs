@@ -21,34 +21,34 @@
    [matterhorn.provider.yf.subs :as yf.sub]
    ["process" :as process]))
 
-(defn title []
-  [dye/box {:justify-content :center}
-   [dye/text "matterhorn"]])
-
-(def atm_ (atom []))
-
 (defn log-window []
   (let [height_   (r/atom nil)
         log-data_ (rf/subscribe [::log.sub/data])]
     (fn []
       (into [dye/vscroller {:id           :log-window
                             :active?      true
-                            :height       @height_
+                            :height       (- @height_ 2)
                             :flex-grow    2
                             :border-style :round
                             :ref          (fn [el]
-                                            (let [h (some-> el dye/measure-element .-height)]
+                                            (let [h (some-> el dye/measure-element :height)]
                                               (when h (not (= h @height_))
                                                     (reset! height_ h))))}]
             (map (fn [[level timestamp msg]]
-                   [dye/text {:key       timestamp
-                              :dim-color false}
-                    [dye/text {:color "gray"}
-                     (enc/format "%-7s" (str level))]
-                    " "
-                    [dye/text timestamp]
-                    " "
-                    [dye/text msg]]))
+                   (let [color (case level
+                                 :debug :gray
+                                 :info  :blue
+                                 :warn  :yellow
+                                 :error :red
+                                 nil)]
+                     [dye/text {:key       timestamp
+                                :dim-color false}
+                      [dye/text {:color color}
+                       (enc/format "%-7s" (str level))]
+                      " "
+                      [dye/text {:color color} timestamp]
+                      " "
+                      [dye/text {:color color} msg]])))
             @log-data_))))
 
 (defn settings []

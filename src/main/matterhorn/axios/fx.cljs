@@ -26,19 +26,22 @@
     _
     ~(timbre/error :flatte-dispatch x)))
 
+(def l (enc/limiter {:5s [5 5000]}))
 (rf/reg-fx
  :axios
  (let [limiter (enc/limiter {:5s [5 5000]})]
    (fn [{:keys [url on-success on-failure] :as m}]
      (let [t (mi/sp
               (loop []
-                (if-not (limiter)
+                (if-let [ms (second (limiter))]
+                  (do
+                    (mi/? (mi/sleep (inc ms)))
+                    (recur))
                   (let [resp (mi/? (<http m))
                         code (some-> resp .-status)]
                     (if (== 200 code)
                       resp
-                      (throw (ex-info "request failed" {:code code :url url :resp resp}))))
-                  (do (mi/? (mi/sleep 1000)) (recur)))))]
+                      (throw (ex-info "request failed" {:code code :url url :resp resp})))))))]
        (t
         (fn [resp]
           (enc/cond!

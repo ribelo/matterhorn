@@ -2,6 +2,7 @@
   (:require
    [taoensso.encore :as enc]
    [taoensso.timbre :as timbre]
+   [missionary.core :as mi]
    [reagent.core :as r]
    [re-frame.core :as rf]
    [ribelo.doxa :as dx]))
@@ -22,7 +23,7 @@
                  (keyword? tx) (dx/commit! db [txs]))))))
        (timbre/error "matterhorn: \":commit\" number of elements should be even")))))
 
-(let [timeouts (atom {})]
+(let [tasks_ (atom {})]
   (rf/reg-fx
    :commit-later
    (fn [data]
@@ -30,15 +31,19 @@
        (if (zero? (mod (count data) 4))
          (let [it (iter data)]
            (while (.hasNext it)
-             (let [ms    (.next it)
-                   id    (.next it)
-                   store (.next it)
-                   txs   (.next it)]
+             (let [ms     (.next it)
+                   id     (.next it)
+                   store  (.next it)
+                   txs    (.next it)
+                   tx     (nth txs 0)
+                   cancel (@tasks_ id)]
+               (when cancel (cancel))
                (dx/with-dx! [db store]
-                 (let [t (enc/cond!
-                           :do           (some-> (@timeouts id) js/clearTimeout)
-                           :let          [tx (nth txs 0)]
-                           (vector?  tx) (js/setTimeout #(dx/commit! db txs)   ms)
-                           (keyword? tx) (js/setTimeout #(dx/commit! db [txs]) ms))]
-                   (swap! timeouts assoc id t))))))
+                 (when-let [task (enc/cond!
+                                   (vector? tx)
+                                   (mi/sp (mi/? (mi/sleep ms)) (dx/commit! db txs))
+
+                                   (keyword? tx)
+                                   (mi/sp (mi/? (mi/sleep ms)) (dx/commit! db [txs])))]
+                   (swap! tasks_ assoc id (task #() #())))))))
          (timbre/error "matterhorn: \":commit\" number of elements should be a multiple of 4"))))))

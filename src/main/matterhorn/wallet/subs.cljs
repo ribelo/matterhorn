@@ -37,7 +37,7 @@
                                :wallet-money      (m/pred pos? ?m)
                                :wallet-cnt        (m/pred pos? ?n)}}}
              [?ticker ?p ?n ?m])
-           (sort-by second enc/rcompare))))))
+           (sort-by last enc/rcompare))))))
 
 (rf/reg-sub-raw
  ::wallet-value

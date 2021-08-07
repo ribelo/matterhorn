@@ -1,6 +1,6 @@
 {
   "name": "matterhorn",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "resources/electron.js",
   "build": {
     "files": [
@@ -9,6 +9,11 @@
       "!.cpcache",
       "!.resources/public/js/cljs-runetime"
     ]
+  },
+  "pkg": {
+    "scripts": "build/*.js",
+    "targets": [ "node16-linux-x64" ],
+    "outputPath": "dist"
   },
   "repository": {
     "type": "git",

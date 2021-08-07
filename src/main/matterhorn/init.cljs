@@ -7,31 +7,22 @@
    [taoensso.timbre :as timbre]
    [ribelo.doxa :as dx]
    [matterhorn.subs]
-   ;; [matterhorn.worker.fx]
    [matterhorn.schema]
    [matterhorn.fx]
    [matterhorn.cofx]
    [matterhorn.axios.fx]
    [matterhorn.file-storage.fx]
    [matterhorn.file-storage.events :as fs.evt]
-   ;; [matterhorn.firebase.fx]
-   ;; [matterhorn.firebase.events]
    [matterhorn.db.core]
    [matterhorn.db.fx]
    [matterhorn.db.events :as db.evt]
    [matterhorn.logging.events :as log.evt]
    [matterhorn.logging.subs :as log.sub]
-   ;; [matterhorn.ui.subs]
-   ;; [matterhorn.ui.events]
-   ;; [matterhorn.auth.fx]
-   ;; [matterhorn.auth.subs]
-   ;; [matterhorn.auth.events]
    [matterhorn.provider.yf.events :as yf.evt]
    [matterhorn.provider.yf.subs]
    [matterhorn.quant.events :as quant.evt]
    [matterhorn.wallet.events]
    [matterhorn.wallet.subs]
-
    [matterhorn.provider.cboe.events :as cboe.evt]))
 
 (let [log-appender {:enabled?   true
@@ -41,19 +32,20 @@
                     :output-fn  :inherit
                     :fn         (fn [data]
                                   (rf/dispatch [::log.evt/append data]))}
-      tap-appender {:enabled?   true
-                    :async?     true
-                    :min-level  nil
-                    :rate-limit nil
-                    :output-fn  :inherit
-                    :fn         (fn [data]
-                                  (let [level     (:level data)
-                                        timestamp @(:timestamp_ data)
-                                        msg       @(:msg_ data)]
-                                    (tap> [level timestamp msg])))}]
+      tap-appender (when goog/DEBUG
+                     {:enabled?   true
+                      :async?     true
+                      :min-level  nil
+                      :rate-limit nil
+                      :output-fn  :inherit
+                      :fn         (fn [data]
+                                    (let [level     (:level data)
+                                          timestamp @(:timestamp_ data)
+                                          msg       @(:msg_ data)]
+                                      (tap> [level timestamp msg])))})]
   (timbre/merge-config! {:level     :debug
                          :appenders {:re-frame log-appender
-                                     :tap      tap-appender
+                                     :tap      (when goog/DEBUG tap-appender)
                                      :console  {:enabled? false}
                                      :println  {:enabled? false}}}))
 
