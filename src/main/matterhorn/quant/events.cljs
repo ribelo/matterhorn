@@ -49,7 +49,5 @@
 (comment
   (rf/dispatch [::refresh-quants])
   (dx/with-dx! [quotes_ :yahoo/quotes]
-    (let [data (-> (q/quotes @quotes_ :msft :mn)
-                   (q/close -12 -1))]
-      (quant/redp-single-allocation 0.0 0.3 data)))
+    (q/quotes @quotes_ :orcl :mn))
   )

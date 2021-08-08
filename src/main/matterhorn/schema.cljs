@@ -31,6 +31,8 @@
 (register! :datetime
            [:re #"\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z)"])
 
+(register! :inst inst?)
+
 (register! :candle/price
            [:and number? pos?])
 
@@ -44,7 +46,7 @@
 
 (register! :candle/bar
            [:map
-            [:time   [:or :date :datetime]]
+            [:time   :inst]
             [:open   :candle/price]
             [:high   :candle/price]
             [:low    :candle/price]

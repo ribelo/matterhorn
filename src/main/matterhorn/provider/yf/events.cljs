@@ -71,9 +71,10 @@
    {:fx [[:commit [:app/cache [[:dx/put    [:db/id :yahoo/web] :searching-failure? true]
                                [:dx/delete [:db/id :yahoo/web] :searching-ticker?]
                                [:dx/delete [:db/id :yahoo/web] :search-ticker-result]]]]
-         [:dispatch [::fetch-crumb (-> m
-                                       (update :ticker keyword)
-                                       (assoc :on-success [::toggle-download-ticker {:ticker (keyword ticker)}]))]]]}))
+         ;; [:dispatch [::fetch-crumb (-> m
+         ;;                               (update :ticker keyword)
+         ;;                               (assoc :on-success [::toggle-download-ticker {:ticker (keyword ticker)}]))]]
+         ]}))
 
 ;;
 ;; * trading
@@ -119,7 +120,7 @@
      {:fx [[:commit [:app/cache [:dx/put [:db/id ticker] :featching? true]]]
            [:axios  {:method     :get
                      :url        (enc/format url (str/upper (name ticker)))
-                     :on-success [[::fetch-crumb-success m] on-success]
+                     :on-success [[::fetch-crumb-success m]]
                      :on-failure [[::fetch-crumb-failure m] on-failure]}]]})))
 
 (rf/reg-event-fx
@@ -146,8 +147,8 @@
   (dx/with-dx! [cache_ :app/cache]
     @cache_)
 
-  (dx/with-dx! [quotes_ :yahoo/quotes]
-    (q/quotes @quotes_ :msft :mn))
+  (dx/with-dx! [cache_ :app/cache]
+    (get-in @cache_ [:db/id :ciech :crumb]))
   )
 
 (rf/reg-event-fx
@@ -162,7 +163,8 @@
          end-time    (-> (or end-time (js/Date.)) (js/Date.) .getTime (/ 1000) long)
          url         "https://query2.finance.yahoo.com/v8/finance/chart/%s"
          url         (enc/format url (str/upper (name ticker)))]
-     {:fx [[:axios  {:method     :get
+     {:fx [[:commit [:app/cache [:dx/update [:db/id ticker] :failure-count inc]]]
+           [:axios  {:method     :get
                      :url        url
                      :opts       {:params {:period1  start-time
                                            :period2  end-time
@@ -170,6 +172,7 @@
                      :on-success [[::fetch-quotes-success m] on-success]
                      :on-failure [[::fetch-quotes-failure m] on-failure]}]]})))
 
+(def atm_ (atom nil))
 
 (rf/reg-event-fx
  ::fetch-quotes-success
@@ -179,37 +182,45 @@
    (enc/have! resp)
    (let [result (->clj (some-> resp .-data .-chart .-result))
          timezone (m/rewrite result [{:meta {:timezone ?tz}}] ?tz)
-         data (m/rewrite result
-                [{:timestamp [(m/app (fn [t] (-> (* t 1000)
-                                                (dtf-tz/zonedTimeToUtc timezone))) !ts) ...]
-                  :indicators {:quote [{:open   [!os ...]
-                                        :high   [!hs ...]
-                                        :low    [!ls ...]
-                                        :close  [!cs ...]
-                                        :volume [!vs ...]}]}}]
-                [{:time   !ts
-                  :open   !os
-                  :high   !hs
-                  :low    !ls
-                  :close  !cs
-                  :volume !vs} ...])]
+         data (=>> (m/rewrite result
+                     [{:timestamp  [(m/app (fn [t] (-> (* t 1000)
+                                                      (dtf-tz/zonedTimeToUtc timezone))) !ts) ...]
+                       :indicators {:quote [{:open   [!os ...]
+                                             :high   [!hs ...]
+                                             :low    [!ls ...]
+                                             :close  [!cs ...]
+                                             :volume [!vs ...]}]}}]
+                     [{:time   !ts
+                       :open   !os
+                       :high   !hs
+                       :low    !ls
+                       :close  !cs
+                       :volume !vs} ...])
+                   (filter schema/candle-bar?))]
      {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :fetched? true]
-                                 [:dx/delete [:db/id ticker] :failure?]]]]
+                                 [:dx/delete [:db/id ticker] :failure?]
+                                 [:dx/delete [:db/id ticker] :failure-count]]]]
            [:commit [:yahoo/quotes [[:dx/update [:db/id ticker] :data
                                      (fn [v]
                                        (into (or v []) (enc/xdistinct :time) data))]]]]
            [:dispatch [::quant.evt/refresh-quant m]]
-           [:freeze-store :yahoo/quotes]]})
-   ))
+           [:freeze-store :yahoo/quotes]]})))
 
 (rf/reg-event-fx
  ::fetch-quotes-failure
- (fn [_ [_eid {:keys [ticker] :as m}]]
+ [(rf/inject-cofx ::dx/with-dx! [:cache :app/cache])]
+ (fn [{:keys [cache]} [_eid {:keys [ticker] :as m}]]
    (timbre/error _eid ticker)
    (enc/have! keyword? ticker)
-   {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :failure? true]]]]
-         [:dispatch-later [(enc/ms :secs 10) [_eid ticker]
-                           [::fetch-quotes m]]]]}))
+   (let [cnt (get-in cache [:db/id ticker :failure-count] 0)]
+     {:fx [[:commit [:app/cache [[:dx/put [:db/id ticker] :failure? true]]]]
+           (let [ms (cond
+                      (< cnt 5)  (enc/ms :secs 10)
+                      (< cnt 10) (enc/ms :mins 1)
+                      (< cnt 15) (enc/ms :mins 5)
+                      :else      (enc/ms :mins 15))]
+             [:dispatch-later [ms [_eid ticker]
+                               [::fetch-quotes m]]])]})))
 
 (defn join-events [events]
   [:dispatch
@@ -282,8 +293,8 @@
      (let [price (some-> htree (.querySelector "#quote-header-info .Trsdu\\(0\\.3s\\)") .-textContent
                      (str/replace "," ""))
            [_ diff-value diff-percentage]
-           (->> (.querySelector htree "#quote-header-info .Trsdu\\(0\\.3s\\):nth-of-type(2)") .-textContent
-                (re-find #"([+-]?\d+[,\d+]*.\d+) \(([+-]?\d+[,\d+]*.\d+)%\)"))
+           (some->> (.querySelector htree "#quote-header-info .Trsdu\\(0\\.3s\\):nth-of-type(2)") .-textContent
+                    (re-find #"([+-]?\d+[,\d+]*.\d+) \(([+-]?\d+[,\d+]*.\d+)%\)"))
            m     {:price           (enc/as-?float price)
                   :diff-value      (enc/as-?float diff-value)
                   :diff-percentage (/ (enc/as-?float diff-percentage) 100)}]
@@ -347,8 +358,8 @@
 
 (defn- find-value-by-description [^js htree s]
   (some-> htree
-      (.querySelector (enc/format "td:icontains('%s') + td" s))
-      .-textContent))
+          (.querySelector (enc/format "td:icontains('%s') + td" s))
+          .-textContent))
 
 (defn parse-stats [htree]
   {:market-cap                          (enc/catching (-> (find-value-by-description htree "market cap")                     ->value))
